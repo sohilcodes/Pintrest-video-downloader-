@@ -351,10 +351,27 @@
   flex-wrap: wrap;
 }
 
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.urlPreview {
+  font-size: 12px;
+  color: #555;
+  font-family: monospace;
+}
+
 .linkInfo {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .qualityBadge {
@@ -524,5 +541,4 @@
   .nav { display: none; }
   .hero { padding: 50px 20px 40px; }
   .linkRow { flex-direction: column; align-items: flex-start; }
-                   }
-  
+}
