@@ -3,29 +3,23 @@
 import { useState } from "react";
 import styles from "./page.module.css";
 
-interface DownloadResult {
-  title?: string;
-  thumbnail?: string;
-  duration?: string;
-  downloads?: {
-    quality?: string;
+interface ApiResult {
+  success?: boolean;
+  type?: string;
+  data?: {
     url?: string;
-    extension?: string;
-    size?: string;
-    type?: string;
-  }[];
-  // fallback for various API response shapes
-  url?: string;
-  urls?: string[];
-  video?: string;
-  image?: string;
-  data?: unknown;
+    width?: number;
+    height?: number;
+    duration?: number;
+    thumbnail?: string;
+  };
+  error?: string;
 }
 
 export default function Home() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<DownloadResult | null>(null);
+  const [result, setResult] = useState<ApiResult | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -42,7 +36,7 @@ export default function Home() {
       const res = await fetch(`/api/download?url=${encodeURIComponent(url.trim())}`);
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok || data.success === false) {
         setError(data.error || "Kuch gadbad ho gayi");
       } else {
         setResult(data);
@@ -69,37 +63,21 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Extract downloadable links from various API response shapes
-  const getLinks = (): { url: string; label: string; type: string }[] => {
-    if (!result) return [];
-    const links: { url: string; label: string; type: string }[] = [];
-
-    if (result.downloads && Array.isArray(result.downloads)) {
-      result.downloads.forEach((d, i) => {
-        if (d.url) {
-          links.push({
-            url: d.url,
-            label: d.quality || d.type || `Download ${i + 1}`,
-            type: d.extension || "mp4",
-          });
-        }
-      });
-    }
-    if (result.video) links.push({ url: result.video, label: "Video Download", type: "mp4" });
-    if (result.image) links.push({ url: result.image, label: "Image Download", type: "jpg" });
-    if (result.url) links.push({ url: result.url, label: "Download", type: "mp4" });
-    if (result.urls && Array.isArray(result.urls)) {
-      result.urls.forEach((u, i) => links.push({ url: u, label: `Link ${i + 1}`, type: "mp4" }));
-    }
-
-    return links;
+  const formatDuration = (ms?: number) => {
+    if (!ms) return null;
+    const secs = Math.floor(ms / 1000);
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
   };
 
-  const links = getLinks();
+  const mediaUrl = result?.data?.url;
+  const thumbnail = result?.data?.thumbnail;
+  const duration = formatDuration(result?.data?.duration);
+  const isVideo = result?.type === "video";
 
   return (
     <main className={styles.main}>
-      {/* Background blobs */}
       <div className={styles.blob1} />
       <div className={styles.blob2} />
 
@@ -129,7 +107,6 @@ export default function Home() {
           Koi bhi Pinterest pin ka link paste karo — video ya image turant download ho jayegi
         </p>
 
-        {/* Input Box */}
         <div className={styles.inputWrap}>
           <div className={styles.inputBox}>
             <svg className={styles.linkIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -140,19 +117,13 @@ export default function Home() {
               type="text"
               value={url}
               onChange={(e) => { setUrl(e.target.value); setError(""); }}
-              placeholder="https://pinterest.com/pin/..."
+              placeholder="https://pin.it/... ya pinterest.com/pin/..."
               className={styles.input}
               onKeyDown={(e) => e.key === "Enter" && handleDownload()}
             />
-            <button onClick={handlePaste} className={styles.pasteBtn}>
-              Paste
-            </button>
+            <button onClick={handlePaste} className={styles.pasteBtn}>Paste</button>
           </div>
-          <button
-            onClick={handleDownload}
-            disabled={loading}
-            className={styles.downloadBtn}
-          >
+          <button onClick={handleDownload} disabled={loading} className={styles.downloadBtn}>
             {loading ? (
               <span className={styles.spinner} />
             ) : (
@@ -179,59 +150,54 @@ export default function Home() {
       </section>
 
       {/* Result */}
-      {result && (
+      {result && mediaUrl && (
         <section className={styles.resultSection}>
           <div className={styles.resultCard}>
-            {/* Thumbnail */}
-            {result.thumbnail && (
+            {thumbnail && (
               <div className={styles.thumbWrap}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={result.thumbnail} alt="Pinterest thumbnail" className={styles.thumb} />
-                <div className={styles.thumbOverlay}>
-                  <svg viewBox="0 0 24 24" fill="white" width="40" height="40">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
-                </div>
+                <img src={thumbnail} alt="Pinterest thumbnail" className={styles.thumb} />
+                {isVideo && (
+                  <div className={styles.thumbOverlay}>
+                    <svg viewBox="0 0 24 24" fill="white" width="40" height="40">
+                      <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                  </div>
+                )}
               </div>
             )}
 
             <div className={styles.resultInfo}>
-              {result.title && <h3 className={styles.resultTitle}>{result.title}</h3>}
-              {result.duration && (
-                <span className={styles.duration}>⏱ {result.duration}</span>
-              )}
+              <div className={styles.metaRow}>
+                <span className={styles.qualityBadge}>{isVideo ? "🎬 Video" : "🖼️ Image"}</span>
+                {duration && <span className={styles.duration}>⏱ {duration}</span>}
+                {result.data?.width && result.data?.height && (
+                  <span className={styles.duration}>{result.data.width}×{result.data.height}</span>
+                )}
+              </div>
 
-              {links.length > 0 ? (
-                <div className={styles.linksGrid}>
-                  {links.map((link, i) => (
-                    <div key={i} className={styles.linkRow}>
-                      <div className={styles.linkInfo}>
-                        <span className={styles.qualityBadge}>{link.label}</span>
-                        <span className={styles.extBadge}>.{link.type}</span>
-                      </div>
-                      <div className={styles.linkActions}>
-                        <button onClick={() => copyLink(link.url)} className={styles.copyBtn}>
-                          {copied ? "✓ Copied!" : "Copy Link"}
-                        </button>
-                        <a
-                          href={link.url}
-                          download
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={styles.dlBtn}
-                        >
-                          ↓ Download
-                        </a>
-                      </div>
-                    </div>
-                  ))}
+              <div className={styles.linksGrid}>
+                <div className={styles.linkRow}>
+                  <div className={styles.linkInfo}>
+                    <span className={styles.extBadge}>{isVideo ? ".mp4" : ".jpg"}</span>
+                    <span className={styles.urlPreview}>{mediaUrl.slice(0, 48)}...</span>
+                  </div>
+                  <div className={styles.linkActions}>
+                    <button onClick={() => copyLink(mediaUrl)} className={styles.copyBtn}>
+                      {copied ? "✓ Copied!" : "Copy Link"}
+                    </button>
+                    <a
+                      href={mediaUrl}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.dlBtn}
+                    >
+                      ↓ Download
+                    </a>
+                  </div>
                 </div>
-              ) : (
-                <div className={styles.rawResult}>
-                  <p className={styles.rawLabel}>API Response:</p>
-                  <pre className={styles.rawJson}>{JSON.stringify(result, null, 2)}</pre>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </section>
@@ -255,11 +221,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className={styles.footer}>
         <p>PinSave — Sirf personal use ke liye. Pinterest ke terms follow karo.</p>
       </footer>
     </main>
   );
-                    }
+          }
               
